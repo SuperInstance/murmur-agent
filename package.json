@@ -1,0 +1,20 @@
+{
+  "name": "murmur-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "All-night thinking git-agent — drop into any project, let it think",
+  "bin": { "murmur": "./src/cli.ts" },
+  "scripts": {
+    "think": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yaml": "^2.4.0",
+    "glob": "^10.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0",
+    "tsx": "^4.0.0"
+  }
+}
