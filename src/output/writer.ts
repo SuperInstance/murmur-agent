@@ -1,3 +1,18 @@
+/**
+ * OutputWriter — File system persistence for Murmur thoughts and knowledge tensors.
+ *
+ * Handles writing thoughts, tensor snapshots, and summaries to disk in
+ * markdown, JSON, or both formats. Files are written to a configurable
+ * output directory (default: murmur-output/) and follow a zero-padded
+ * naming convention (e.g., 001-explore.md, 002-connect.json).
+ *
+ * Usage:
+ *   const writer = new OutputWriter('./murmur-output', 'both');
+ *   writer.writeThought(thought);    // -> [path/to/001-explore.md, path/to/001-explore.json]
+ *   writer.writeTensor(tensor);      // -> path/to/tensor.json
+ *   writer.writeSummary(tensor);     // -> path/to/SUMMARY.md
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Thought, KnowledgeTensor } from '../types.js';
@@ -6,12 +21,25 @@ export class OutputWriter {
   private outputDir: string;
   private format: 'markdown' | 'json' | 'both';
 
+  /**
+   * Create an OutputWriter. The output directory is created recursively if it doesn't exist.
+   * @param outputDir - Directory path for all output files
+   * @param format - Output format: 'markdown', 'json', or 'both'
+   */
   constructor(outputDir: string, format: 'markdown' | 'json' | 'both') {
     this.outputDir = outputDir;
     this.format = format;
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  /**
+   * Write a single thought to disk.
+   * File naming: {zero-padded-id}-{strategy}.{ext}
+   * e.g., 001-explore.md, 001-explore.json
+   *
+   * @param thought - The thought to persist
+   * @returns Array of file paths that were written
+   */
   writeThought(thought: Thought): string[] {
     const files: string[] = [];
     const padded = String(thought.id).padStart(3, '0');
@@ -54,12 +82,27 @@ export class OutputWriter {
     return files;
   }
 
+  /**
+   * Serialize the full knowledge tensor to a JSON file.
+   * This is called after every thought to maintain a live snapshot.
+   *
+   * @param tensor - The knowledge tensor to serialize
+   * @returns Path to the written tensor.json file
+   */
   writeTensor(tensor: KnowledgeTensor): string {
     const tensorPath = path.join(this.outputDir, 'tensor.json');
     fs.writeFileSync(tensorPath, JSON.stringify(tensor, null, 2));
     return tensorPath;
   }
 
+  /**
+   * Generate a human-readable SUMMARY.md from the knowledge tensor.
+   * Includes thought clusters, contradictions, open questions,
+   * and confidence distribution across all thoughts.
+   *
+   * @param tensor - The knowledge tensor to summarize
+   * @returns Path to the written SUMMARY.md file
+   */
   writeSummary(tensor: KnowledgeTensor): string {
     const summaryPath = path.join(this.outputDir, 'SUMMARY.md');
     const content = [

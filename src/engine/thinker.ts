@@ -1,3 +1,24 @@
+/**
+ * Thinker — Main orchestration engine for Murmur-Agent.
+ *
+ * The Thinker manages the full thinking lifecycle: strategy selection,
+ * thought generation, budget enforcement, tensor updates, and output
+ * persistence. It can run a single thought via think() or all thoughts
+ * sequentially via runAll().
+ *
+ * The Thinker cycles through configured strategies in order, with a 20%
+ * chance of repeating the previous strategy for deeper exploration.
+ *
+ * Session state can be saved to and loaded from JSON for persistence
+ * across restarts (critical for long-running overnight sessions).
+ *
+ * Usage:
+ *   const thinker = new Thinker(config);
+ *   thinker.setContext('project context...');
+ *   await thinker.runAll();
+ *   console.log(thinker.getTensor().thoughts.length);
+ */
+
 import type { MurmurConfig, Thought, KnowledgeTensor, ThinkingStrategy } from '../types.js';
 import { BudgetTracker } from './budget.js';
 import { executeStrategy } from './strategies.js';
@@ -13,6 +34,11 @@ export class Thinker {
   private thoughtCount: number = 0;
   private contextSummary: string = '';
 
+  /**
+ * Create a new Thinker instance.
+ * Initializes the knowledge tensor, budget tracker, and output writer.
+ * @param config - Full Murmur configuration (topic, strategies, budget, etc.)
+ */
   constructor(config: MurmurConfig) {
     this.config = config;
     this.budget = new BudgetTracker(config.budget);
@@ -29,18 +55,28 @@ export class Thinker {
     };
   }
 
+  /** Set an optional project context summary to ground the thinking strategies. */
   setContext(summary: string): void {
     this.contextSummary = summary;
   }
 
+  /** Get a shallow copy of the current knowledge tensor. */
   getTensor(): KnowledgeTensor {
     return { ...this.tensor };
   }
 
+  /** Get the budget tracker for inspection. */
   getBudget(): BudgetTracker {
     return this.budget;
   }
 
+  /**
+   * Generate a single thought.
+   * Picks a strategy, executes it, records budget usage, updates the tensor,
+   * writes the thought to disk, and persists the tensor snapshot.
+   *
+   * @returns The generated Thought, or null if max thoughts reached or budget exhausted
+   */
   async think(): Promise<Thought | null> {
     if (this.thoughtCount >= this.config.thinking.maxThoughts) {
       return null;
@@ -88,6 +124,13 @@ export class Thinker {
     return thought;
   }
 
+  /**
+   * Run all thoughts until maxThoughts or budget is exhausted.
+   * Respects the configured interval between thoughts.
+   * Generates a SUMMARY.md when complete if autoSummary is enabled.
+   *
+   * @returns The number of thoughts generated
+   */
   async runAll(): Promise<number> {
     let count = 0;
     while (this.thoughtCount < this.config.thinking.maxThoughts && this.budget.canAffordCall) {
@@ -108,6 +151,11 @@ export class Thinker {
     return count;
   }
 
+  /**
+   * Pick the next strategy from the configured list.
+   * Cycles through strategies in order, with a 20% chance of
+   * repeating the last strategy for deeper exploration of a single angle.
+   */
   private pickStrategy(): ThinkingStrategy {
     const strategies = this.config.thinking.strategies;
     // Cycle through strategies, but occasionally repeat the last one for depth
@@ -119,6 +167,7 @@ export class Thinker {
     return strategies[idx];
   }
 
+  /** Save the current session state (tensor, budget, thought count) to a JSON file. */
   saveState(filePath: string): void {
     fs.writeFileSync(filePath, JSON.stringify({
       tensor: this.tensor,
@@ -127,6 +176,7 @@ export class Thinker {
     }, null, 2));
   }
 
+  /** Restore session state from a previously saved JSON file. Ignores missing files. */
   loadState(filePath: string): void {
     if (!fs.existsSync(filePath)) return;
     const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
